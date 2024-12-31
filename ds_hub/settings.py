@@ -11,6 +11,14 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+from decouple import config
+
+CLIENT_ID = config('CLIENT_ID')
+CLIENT_SECRET = config('CLIENT_SECRET')
+TENANT_ID = config('TENANT_ID')
+MY_USERNAME = config('MY_USERNAME')
+MY_PASSWORD = config('MY_PASSWORD')
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
