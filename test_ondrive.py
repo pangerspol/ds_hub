@@ -12,6 +12,10 @@ manager.authenticate()
 #print("List of drives:", drives)
 
 # List the contents of the drive
-drive_id = "b!Sm5Rdoh1bUq94YPabsGWGuRxlSNtNf5JiFajd7jPnp67gLodnSjvQ7y2xdmZql36"
-contents = manager.list_drive_contents(drive_id)
-print("Drive Contents:", contents)
+#drive_id = "b!Sm5Rdoh1bUq94YPabsGWGuRxlSNtNf5JiFajd7jPnp67gLodnSjvQ7y2xdmZql36"
+#contents = manager.list_drive_contents(drive_id)
+#print("Drive Contents:", contents)
+
+# List all available sites
+sites = manager.list_sites()
+print("Available Sites:", sites)
