@@ -2,7 +2,7 @@ from msal import ConfidentialClientApplication
 import requests
 from decouple import config
 
-class OneDriveAuth:
+class OneDriveManager:
     def __init__(self):
         self.client_id = config("CLIENT_ID")
         self.client_secret = config("CLIENT_SECRET")
@@ -16,10 +16,13 @@ class OneDriveAuth:
             authority=f"https://login.microsoftonline.com/{self.tenant_id}"
         )
         result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+        
         if "access_token" in result:
             self.access_token = result["access_token"]
+            print("Authentication successful!")
+            return self.access_token
         else:
-            raise Exception(f"Failed to authenticate: {result}")
+            raise Exception(f"Authentication failed: {result}")
     
     def create_folder(self, folder_name):
         if not self.access_token:
@@ -33,4 +36,13 @@ class OneDriveAuth:
             "@microsoft.graph.conflictBehavior": "rename"
         }
         response = requests.post(url, headers=headers, json=data)
+        return response.json()
+    
+    def list_drives(self):
+        if not self.access_token:
+            raise Exception("Authentication required")
+        
+        url = "https://graph.microsoft.com/v1.0/drives"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(url, headers=headers)
         return response.json()
