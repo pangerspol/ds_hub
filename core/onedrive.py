@@ -48,6 +48,9 @@ class OneDriveManager:
         return response.json()
 
     def list_drive_contents(self, drive_id):
+        if not self.access_token:
+            raise Exception("Authentication required")
+        
         url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root/children"
         headers = {"Authorization": f"Bearer {self.access_token}"}
         response = requests.get(url, headers=headers)
@@ -56,4 +59,18 @@ class OneDriveManager:
             return response.json()  # Returns the contents of the drive
         else:
             raise Exception(f"Failed to list drive contents: {response.json()}")
+        
+    def list_sites(self):
+        if not self.access_token:
+            raise Exception("Authentication required")
+        
+        url = "https://graph.microsoft.com/v1.0/sites"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            return response.json()  # Returns a list of available sites
+        else:
+            raise Exception(f"Failed to list sites: {response.json()}")
+
     
