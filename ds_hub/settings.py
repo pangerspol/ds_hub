@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core',
     'rest_framework',
+    'integrations',
 ]
 
 MIDDLEWARE = [
@@ -82,6 +83,8 @@ DATABASES = {
     }
 }
 
+AUTH_USER_MODEL = 'core.CustomUser'
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -107,7 +110,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/New_York'
 
 USE_I18N = True
 
