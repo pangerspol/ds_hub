@@ -1,7 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django import forms
-from .models import Client, EntryType, Status, MedicalRecord, CustomUser, Location, CustomGroup
+from .models import Client, CustomUser, Location, CustomGroup, Provider
+from entries.models.medical_record import MedicalRecord
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.admin.widgets import AutocompleteSelect
+from integrations.services import SharePointManager
+from django.utils.html import format_html
+
+
 class CustomAdminSite(admin.AdminSite):
     site_header = 'Dressler Strickland Hub'
     site_title = 'DS Hub - Admin Portal'
@@ -11,7 +18,7 @@ class CustomAdminSite(admin.AdminSite):
         app_list = super().get_app_list(request)
         for app in app_list:
             if app['app_label'] == 'core':
-                app['models'].sort(key=lambda x: ['CustomUser', 'CustomGroup', 'Location', 'EntryType', 'Status', 'Client', 'MedicalRecord'].index(x['object_name']))
+                app['models'].sort(key=lambda x: ['Provider', 'Location', 'CustomGroup', 'CustomUser', 'Client'].index(x['object_name']))
         return app_list
 
 custom_admin_site = CustomAdminSite(name='custom_admin')
@@ -57,8 +64,6 @@ class ClientAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['paralegal'].queryset = CustomUser.objects.filter(groups__name='Paralegal')
-        self.fields['attorney'].queryset = CustomUser.objects.filter(groups__name='Attorney')
 
 @admin.register(Client, site=custom_admin_site)
 class ClientAdmin(admin.ModelAdmin):
@@ -66,36 +71,57 @@ class ClientAdmin(admin.ModelAdmin):
     list_display = ('id', 'case_number', 'name')  # Replace with relevant fields
     search_fields = ('case_number', 'name', 'email')
 
-
-@admin.register(EntryType, site=custom_admin_site)
-class EntryTypeAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name')
-    search_fields = ('name',)
-
-
-@admin.register(Status, site=custom_admin_site)
-class StatusAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name')
-
 class MedicalRecordAdminForm(forms.ModelForm):
+
+    invoice_file = forms.FileField(required=False, label="Upload Invoice")
+    approval_file = forms.FileField(required=False)
+    receipt_file = forms.FileField(required=False)
+    record_file = forms.FileField(required=False)
     class Meta:
         model = MedicalRecord
         fields = '__all__'
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['requester'].queryset = CustomUser.objects.filter(groups__name='Requesters')
-
 @admin.register(MedicalRecord, site=custom_admin_site)
 class MedicalRecordAdmin(admin.ModelAdmin):
     form = MedicalRecordAdminForm
-    list_display = ('client', 'invoice_number', 'cost', 'provider', 'status')
+    list_display = ('id', 'client', 'invoice_number', 'cost', 'provider', 'status')
     search_fields = ('client_name', 'status_name')
     list_filter = ('status', 'invoice_number')
     ordering = ('invoice_number',)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        manager = SharePointManager()
+        manager.authenticate()
+        if form.cleaned_data.get('invoice_file'):
+            obj.invoice_path, obj.invoice_file_id = manager.upload_file_to_sharepoint(form.cleaned_data['invoice_file'], obj.temp_folder_id, "invoice")
+        if form.cleaned_data.get('approval_file'):
+            obj.approval_path, obj.approval_file_id = manager.upload_file_to_sharepoint(form.cleaned_data['approval_file'], obj.temp_folder_id, "approval")
+        if form.cleaned_data.get('receipt_file'):
+            obj.receipt_path, obj.receipt_file_id = manager.upload_file_to_sharepoint(form.cleaned_data['receipt_file'], obj.temp_folder_id, "receipt")
+        if form.cleaned_data.get('record_file'):
+            obj.record_path, obj.record_file_id = manager.upload_file_to_sharepoint(form.cleaned_data['record_file'], obj.temp_folder_id, "record")
+        obj.save()
 
 @admin.register(Location, site=custom_admin_site)
 class LocationAdmin(admin.ModelAdmin):
     list_display = ('id', 'name', 'abbreviation', 'address', 'phone_number', 'email', 'is_active')
     search_fields = ('name', 'abbreviation', 'address', 'phone_number', 'email')
+    list_filter = ('is_active',)
+
+class ProviderAdminForm(forms.ModelForm):
+    class Meta:
+        model = Provider
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["entry_type"].queryset = ContentType.objects.filter(app_label='entries')
+        self.fields["entry_type"].label_from_instance = lambda obj: obj.__str__().replace("Entries | ", "")
+
+@admin.register(Provider, site=custom_admin_site)
+class ProviderAdmin(admin.ModelAdmin):
+    form = ProviderAdminForm
+    list_display = ('id', 'name', 'abbreviation', 'website', 'request_portal')
+    search_fields = ('name', 'abbreviation')
     list_filter = ('is_active',)
