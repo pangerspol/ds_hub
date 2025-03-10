@@ -1,8 +1,10 @@
 from msal import ConfidentialClientApplication
 import requests, time
 from decouple import config
-import logging
+import logging, re
 from io import BytesIO
+
+import urllib
 
 class SharePointManager:
     def __init__(self):
@@ -16,6 +18,7 @@ class SharePointManager:
         self.token_expiry = 0  # Unix timestamp when token expires
         self.medical_folder_id = config("MEDICAL_FOLDER_ID")
         self.base_url = "https://graph.microsoft.com/v1.0"
+        logging.basicConfig(level=logging.DEBUG)
     
     def authenticate(self):
         #Retrieves a new OAuth2 token if expired, otherwise returns cached token.
@@ -89,30 +92,95 @@ class SharePointManager:
         else:
             raise Exception(f"Failed to fetch folders: {response.status_code}, {response.text}")
     
-    def search_folders_by_case_number(self, case_number):
+    def search_folders_by_case_number(self, case_number, folder_names=None):
         self.authenticate()
 
         url = f"{self.base_url}/sites/{self.site_id}/drives/{self.drive_id}/root/search(q='{case_number}')"
+        
         headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json"
         }
 
         response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            # Return all items in the response
-            return data.get('value', [])
-        else:
+
+        if response.status_code != 200:
             raise Exception(f"Failed to search folder: {response.status_code}, {response.text}")
+
+        all_items = response.json().get("value", [])
+
+        # **Step 1: Find the main folder where case_number is at the end**
+        main_folder_id = None
+        sharepoint_url = None
+
+        for item in all_items:
+            if "folder" in item:  # Ensure it's a folder, not a file
+                folder_name = item["name"]
+                
+                # Use `rsplit(" - ", 1)` to split only at the LAST " - "
+                parts = re.split(r" - |-", folder_name)  # Splits on " - " or "-"
+                
+                if len(parts) > 1:  # Ensure there's a case number at the end
+                    extracted_case_number = parts[-1]
+                    if extracted_case_number == case_number:
+                        main_folder_id = item["id"]
+                        sharepoint_url = item["webUrl"]
+                        break  # Found the main folder, no need to continue
+
+        if not main_folder_id:
+            return None if folder_names else (None,)  # Return (None,) if no folders exist
+
+        # **If no subfolder names are requested, return only the main folder ID and sharepoint URL**
+        if not folder_names:
+            return main_folder_id, sharepoint_url,
+
+        # **Step 2: Look for subfolders inside `main_folder_id`**
+        subfolder_url = f"{self.base_url}/sites/{self.site_id}/drives/{self.drive_id}/items/{main_folder_id}/children"
+
+        subfolder_response = requests.get(subfolder_url, headers=headers)
+
+        if subfolder_response.status_code != 200:
+            raise Exception(f"Failed to fetch subfolders: {subfolder_response.status_code}, {subfolder_response.text}")
+
+        subfolders = subfolder_response.json().get("value", [])
+
+        # **Find subfolder IDs (Case-Insensitive)**
+        folder_names_lower = {name.lower(): name for name in folder_names}  # Mapping of lowercase -> original name
+        subfolder_ids = {name: None for name in folder_names}  # Prepare dictionary for storing folder IDs
+
+        for subfolder in subfolders:
+            if "folder" in subfolder:
+                subfolder_name_lower = subfolder["name"].lower()
+                if subfolder_name_lower in folder_names_lower:
+                    subfolder_ids[folder_names_lower[subfolder_name_lower]] = subfolder["id"]
+
+        # **Step 3: Create missing subfolders**
+        for folder_name in folder_names:
+            if subfolder_ids[folder_name] is None:
+                logging.info(f"Subfolder '{folder_name}' not found. Creating one...")
+
+                create_folder_url = f"{self.base_url}/sites/{self.site_id}/drives/{self.drive_id}/items/{main_folder_id}/children"
+                folder_data = {
+                    "name": folder_name,
+                    "folder": {},
+                    "@microsoft.graph.conflictBehavior": "fail"
+                }
+
+                create_response = requests.post(create_folder_url, headers=headers, json=folder_data)
+
+                if create_response.status_code == 201:
+                    subfolder_ids[folder_name] = create_response.json().get("id")
+                    logging.info(f"Subfolder '{folder_name}' created successfully.")
+                else:
+                    logging.error(f"Failed to create subfolder '{folder_name}': {create_response.text}")
+
+        return (main_folder_id, sharepoint_url, *[subfolder_ids[name] for name in folder_names])  # Return as separate values
         
-    # Folder Management
-        
-    def create_temp_folder(self, provider, invoice_number, client_name, case_number):
+    # Folder Management 
+    def create_folder(self, provider, invoice_number, client_name, case_number, parent_folder):
         self.authenticate()
 
         folder_name = f"{provider} - Inv #{invoice_number} - {client_name}_{case_number}"
-        parent_folder = "Medical Records"
 
         url = f"{self.base_url}/sites/{self.site_id}/drives/{self.open_requests_drive_id}/items/root:/{parent_folder}:/children"
         
@@ -137,12 +205,10 @@ class SharePointManager:
             logging.error(f"Error: {response.status_code} - Failed to create folder {folder_name}: {response.text}")
             return False, None
         
-    def delete_temp_folder(self, temp_folder_id):
+    def delete_folder(self, folder_id):
         self.authenticate()
 
-        parent_folder = "Medical Records"
-
-        url = f"{self.base_url}/sites/{self.site_id}/drives/{self.open_requests_drive_id}/items/{temp_folder_id}"
+        url = f"{self.base_url}/sites/{self.site_id}/drives/{self.open_requests_drive_id}/items/{folder_id}"
         
         headers = {
             "Authorization": f"Bearer {self.access_token}"
@@ -157,7 +223,7 @@ class SharePointManager:
             logging.error(f"Failed to delete folder: {response.text}")
             return False
     
-    def upload_file_to_sharepoint(self, file, folder_id, document_type, custom_name=None):
+    def upload_file(self, file, folder_id, document_type, custom_name=None):
         self.authenticate()
         headers = {"Authorization": f"Bearer {self.access_token}"}
 
@@ -214,9 +280,22 @@ class SharePointManager:
         else:
             headers["Content-Type"] = "application/json"
 
+            encoded_file_name = urllib.parse.quote(file_name)
+
             # **Step 1: Create Upload Session**
-            url = f"{self.base_url}/sites/{self.site_id}/drives/{self.open_requests_drive_id}/items/{folder_id}:/{file_name}:/createUploadSession"
-            response = requests.post(url, headers=headers, json={"item": {"@microsoft.graph.conflictBehavior": "replace"}})
+            url = f"{self.base_url}/sites/{self.site_id}/drives/{self.open_requests_drive_id}/items/{folder_id}:/{encoded_file_name}:/createUploadSession"
+
+            payload = {
+                "item": {
+                    "@microsoft.graph.conflictBehavior": "replace"
+                }
+            }
+
+            logging.debug(f"Creating upload session with URL: {url}")
+            logging.debug(f"Headers: {headers}")
+            logging.debug(f"Payload: {payload}")
+
+            response = requests.post(url, headers=headers, json=payload)
 
             if response.status_code != 200:
                 logging.error(f"Failed to create upload session: {response.text}")
@@ -265,7 +344,7 @@ class SharePointManager:
     def download_file(self, file_id):
         self.authenticate()
 
-        url = f"https://graph.microsoft.com/v1.0/sites/{self.site_id}/drives/{self.open_requests_drive_id}/items/{file_id}/content"
+        url = f"{self.base_url}/sites/{self.site_id}/drives/{self.open_requests_drive_id}/items/{file_id}/content"
         
         headers = {
             "Authorization": f"Bearer {self.access_token}",
@@ -278,5 +357,50 @@ class SharePointManager:
             return BytesIO(response.content)  # Return file content as BytesIO
         else:
             raise Exception(f"Failed to download file: {response.status_code} {response.text}")
+        
+    def copy_file(self, file_id, target_folder_id, original_drive_id=None, target_drive_id=None, custom_name=None):
+        access_token = self.authenticate()  # Ensure token is valid
+
+        original_drive_id = original_drive_id or self.open_requests_drive_id
+        target_drive_id = target_drive_id or self.drive_id
+        
+        if not custom_name:
+            get_name_url = f"{self.base_url}/drives/{original_drive_id}/items/{file_id}"
+            get_name_headers = {"Authorization": f"Bearer {access_token}"}
+
+            response = requests.get(get_name_url, headers=get_name_headers)
+
+            if response.status_code == 200:
+                file_name = response.json().get("name")
+            else:
+                raise Exception(f"Failed to retrieve file name: {response.text}")
+            
+        else:
+            file_name = custom_name
+
+        access_token = self.authenticate()  # Ensure token is valid
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        copy_url = f"{self.base_url}/drives/{original_drive_id}/items/{file_id}/copy"
+
+        # Destination configuration
+        copy_payload = {
+            "parentReference": {
+                "driveId": target_drive_id,  # Target Drive
+                "id": target_folder_id  # Target Folder
+            },
+            "name": file_name  # Rename file if needed
+        }
+
+        response = requests.post(copy_url, headers=headers, json=copy_payload)
+
+        if response.status_code == 202:
+            print("File copy operation started successfully!")
+            return response
+        else:
+            raise Exception(f"Failed to copy file: {response.text}")
 
     
