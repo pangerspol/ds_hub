@@ -1,2 +1,4 @@
 from integrations.services.pdf import PDFManager
 from integrations.services.sharepoint import SharePointManager
+from integrations.services.email import EmailService
+from integrations.services.google_sheets import GoogleSheetManager

@@ -23,6 +23,6 @@ def update_medical_record_status(sender, instance, created, **kwargs):
 @receiver(pre_delete, sender=MedicalRecord)
 def handle_medical_record_delete(sender, instance, **kwargs):
     manager = SharePointManager()
-    success = manager.delete_temp_folder(instance.temp_folder_id)
+    success = manager.delete_folder(instance.temp_folder_id)
     if success:
         print(f"Medical Record deleted: {instance}. Client: {instance.client}")
