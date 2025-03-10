@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 from decouple import config
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,7 +27,7 @@ SECRET_KEY = 'django-insecure-xy)n^2m!it8%lhh7^kd573iw&2=p#ckps%acym91p0&-^h*xg-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["127.0.0.1", "192.168.40.152"]
+ALLOWED_HOSTS = ["127.0.0.1", "192.168.40.147"]
 
 
 # Application definition
@@ -134,6 +135,22 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [os.path.join(BASE_DIR, "templates")],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
 # Email Settings for billing@dresslerlaw.com
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.office365.com'  # Assuming Office 365/Outlook
@@ -141,4 +158,5 @@ EMAIL_PORT = 587  # Standard port for TLS
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'billing@dresslerlaw.com'
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
-DEFAULT_FROM_EMAIL = 'billing@dresslerlaw.com'
+EMAIL_USE_SSL = False  # Don't use SSL (conflicts with TLS)
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER

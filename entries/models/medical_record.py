@@ -6,7 +6,7 @@ from entries.enum import MedicalRecordStatus
 
 class MedicalRecord(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='medical_records')
-    requester = models.ManyToManyField(CustomUser, limit_choices_to={'groups__name': 'Requester'}, related_name='medical_records')
+    requester = models.ForeignKey(CustomUser, on_delete=models.PROTECT, null=True, blank=False, limit_choices_to={'groups__name': 'Requester'}, related_name='medical_records')
 
     provider = models.ForeignKey(Provider, on_delete=models.PROTECT, null=True, blank=False, related_name='medical_records')
     facility = models.CharField(max_length=255)
@@ -15,6 +15,12 @@ class MedicalRecord(models.Model):
     quantity = models.IntegerField()
     is_cd = models.BooleanField(default=False)
     cost = models.DecimalField(max_digits=10, decimal_places=2)
+    skip_request = models.BooleanField(default=False)
+    notify_requester = models.BooleanField(default=True)
+    notify_attorney = models.BooleanField(default=False)
+    reply_to = models.BooleanField(default=False)
+
+    last_approval_message_id = models.CharField(max_length=500, null=True, blank=True)
 
     temp_folder_id = models.CharField(max_length=500, null=True, blank=True)
     invoice_path = models.CharField(max_length=500, null=True,blank=True)

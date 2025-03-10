@@ -8,6 +8,12 @@ class Client(models.Model):
     paralegal = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, limit_choices_to={'groups__name': 'Paralegal'}, related_name="paralegal_client")
     attorney = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, limit_choices_to={'groups__name': 'Attorney'}, related_name="attorney_client")
     office = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True)
+
+    sharepoint_url = models.CharField(max_length=500, blank=True)
+    main_folder_id = models.CharField(max_length=500, blank=True)
+    expense_folder_id = models.CharField(max_length=500, blank=True)
+    lexviamail_folder_id = models.CharField(max_length=500, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

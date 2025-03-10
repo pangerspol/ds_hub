@@ -4,10 +4,8 @@ from django import forms
 from .models import Client, CustomUser, Location, CustomGroup, Provider
 from entries.models.medical_record import MedicalRecord
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.admin.widgets import AutocompleteSelect
 from integrations.services import SharePointManager
 from django.utils.html import format_html
-
 
 class CustomAdminSite(admin.AdminSite):
     site_header = 'Dressler Strickland Hub'
@@ -26,11 +24,11 @@ custom_admin_site = CustomAdminSite(name='custom_admin')
 @admin.register(CustomUser, site=custom_admin_site)
 class CustomUserAdmin(UserAdmin):
     # Fields to display in the admin list view
-    list_display = ('id', 'username', 'email', 'first_name', 'last_name', 'is_staff', 'location')
+    list_display = ('id', 'username', 'email', 'location')
     # Fields to allow searching
-    search_fields = ('username', 'email', 'first_name', 'last_name')
+    search_fields = ('username', 'email', 'first_name', 'last_name', 'location', 'groups')
     # Filters to display in the sidebar
-    list_filter = ('is_staff', 'is_superuser', 'groups')
+    list_filter = ('groups', 'location')
 
     # Fieldsets for organizing fields in the admin form
     fieldsets = (
@@ -68,8 +66,23 @@ class ClientAdminForm(forms.ModelForm):
 @admin.register(Client, site=custom_admin_site)
 class ClientAdmin(admin.ModelAdmin):
     form = ClientAdminForm
-    list_display = ('id', 'case_number', 'name')  # Replace with relevant fields
-    search_fields = ('case_number', 'name', 'email')
+    list_display = ('id', 'case_number', 'name')
+    search_fields = ('case_number', 'name')
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        manager = SharePointManager()
+        
+        if not obj.office:
+            obj.office = obj.paralegal.location
+
+        if not obj.main_folder_id:
+            
+            obj.main_folder_id, obj.sharepoint_url, obj.expense_folder_id, obj.lexviamail_folder_id = manager.search_folders_by_case_number(obj.case_number, ["Case Expenses", "Lexvia Mail"])
+            if not obj.main_folder_id:
+                print(f"Could not find a folder id for case#{obj.case_number} on CloudDocs")
+                return
+            obj.save()
 
 class MedicalRecordAdminForm(forms.ModelForm):
 
@@ -84,24 +97,41 @@ class MedicalRecordAdminForm(forms.ModelForm):
 @admin.register(MedicalRecord, site=custom_admin_site)
 class MedicalRecordAdmin(admin.ModelAdmin):
     form = MedicalRecordAdminForm
-    list_display = ('id', 'client', 'invoice_number', 'cost', 'provider', 'status')
-    search_fields = ('client_name', 'status_name')
-    list_filter = ('status', 'invoice_number')
-    ordering = ('invoice_number',)
+    list_display = ('id', 'client', 'client__paralegal', 'provider', 'facility', 'invoice_number', 'formatted_cost', 'get_office', 'formatted_status')
+    search_fields = ('client__name', 'client__case_number', 'status', 'invoice_number', 'facility')
+    list_filter = ('status', 'provider', 'facility', 'client__office', 'client__paralegal')
+
+    def get_office(self, obj):
+        return obj.client.office.abbreviation
+    
+    def formatted_cost(self, obj):
+        return f"${obj.cost:.2f}"
+    
+    def formatted_status(self, obj):
+        return obj.status.replace("_", " ").title()
+
+    get_office.short_description = "Office"
+    formatted_cost.short_description = "Cost"
+    formatted_status.short_description = "Status"
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         manager = SharePointManager()
-        manager.authenticate()
         if form.cleaned_data.get('invoice_file'):
-            obj.invoice_path, obj.invoice_file_id = manager.upload_file_to_sharepoint(form.cleaned_data['invoice_file'], obj.temp_folder_id, "invoice")
+            obj.invoice_path, obj.invoice_file_id = manager.upload_file(form.cleaned_data['invoice_file'], obj.temp_folder_id, "invoice")
+            obj.save()
         if form.cleaned_data.get('approval_file'):
-            obj.approval_path, obj.approval_file_id = manager.upload_file_to_sharepoint(form.cleaned_data['approval_file'], obj.temp_folder_id, "approval")
+            obj.approval_path, obj.approval_file_id = manager.upload_file(form.cleaned_data['approval_file'], obj.temp_folder_id, "approval")
+            obj.save()
         if form.cleaned_data.get('receipt_file'):
-            obj.receipt_path, obj.receipt_file_id = manager.upload_file_to_sharepoint(form.cleaned_data['receipt_file'], obj.temp_folder_id, "receipt")
+            if obj.approval_path or obj.cost <= 50:
+                obj.receipt_path, obj.receipt_file_id = manager.upload_file(form.cleaned_data['receipt_file'], obj.temp_folder_id, "receipt")
+                obj.save()
+            else:
+                print("Cannot upload receipt without attorney approval")
         if form.cleaned_data.get('record_file'):
-            obj.record_path, obj.record_file_id = manager.upload_file_to_sharepoint(form.cleaned_data['record_file'], obj.temp_folder_id, "record")
-        obj.save()
+            obj.record_path, obj.record_file_id = manager.upload_file(form.cleaned_data['record_file'], obj.temp_folder_id, "record")
+            obj.save()
 
 @admin.register(Location, site=custom_admin_site)
 class LocationAdmin(admin.ModelAdmin):
