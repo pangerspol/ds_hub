@@ -18,12 +18,12 @@ class SharePointManager:
         self.token_expiry = 0  # Unix timestamp when token expires
         self.medical_folder_id = config("MEDICAL_FOLDER_ID")
         self.base_url = "https://graph.microsoft.com/v1.0"
-        logging.basicConfig(level=logging.DEBUG)
+        # logging.basicConfig(level=logging.DEBUG)
     
     def authenticate(self):
         #Retrieves a new OAuth2 token if expired, otherwise returns cached token.
         if self.access_token and time.time() < self.token_expiry:
-            print("Already Authenticated")
+            # print("Already Authenticated")
             return self.access_token  # Return cached token if still valid
 
         url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
@@ -291,9 +291,9 @@ class SharePointManager:
                 }
             }
 
-            logging.debug(f"Creating upload session with URL: {url}")
-            logging.debug(f"Headers: {headers}")
-            logging.debug(f"Payload: {payload}")
+            # logging.debug(f"Creating upload session with URL: {url}")
+            # logging.debug(f"Headers: {headers}")
+            # logging.debug(f"Payload: {payload}")
 
             response = requests.post(url, headers=headers, json=payload)
 
