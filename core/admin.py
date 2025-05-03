@@ -66,8 +66,9 @@ class ClientAdminForm(forms.ModelForm):
 @admin.register(Client, site=custom_admin_site)
 class ClientAdmin(admin.ModelAdmin):
     form = ClientAdminForm
-    list_display = ('id', 'case_number', 'name')
+    list_display = ('id', 'case_number', 'name', 'paralegal', 'office')
     search_fields = ('case_number', 'name')
+    list_filter = ('paralegal', 'office')
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -97,7 +98,7 @@ class MedicalRecordAdminForm(forms.ModelForm):
 @admin.register(MedicalRecord, site=custom_admin_site)
 class MedicalRecordAdmin(admin.ModelAdmin):
     form = MedicalRecordAdminForm
-    list_display = ('id', 'client', 'client__paralegal', 'provider', 'facility', 'invoice_number', 'formatted_cost', 'get_office', 'formatted_status')
+    list_display = ('id', 'client', 'get_paralegal', 'provider', 'facility', 'get_invoice', 'formatted_cost', 'get_office', 'formatted_status')
     search_fields = ('client__name', 'client__case_number', 'status', 'invoice_number', 'facility')
     list_filter = ('status', 'provider', 'facility', 'client__office', 'client__paralegal')
 
@@ -109,10 +110,18 @@ class MedicalRecordAdmin(admin.ModelAdmin):
     
     def formatted_status(self, obj):
         return obj.status.replace("_", " ").title()
+    
+    def get_paralegal(self, obj):
+        return obj.client.paralegal.username
+    
+    def get_invoice(self, obj):
+        return obj.invoice_number
 
+    get_paralegal.short_description = "Paralegal"
     get_office.short_description = "Office"
     formatted_cost.short_description = "Cost"
     formatted_status.short_description = "Status"
+    get_invoice.short_description = "Invoice"
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
