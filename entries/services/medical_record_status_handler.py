@@ -200,7 +200,7 @@ class MedicalRecordStatusHandler:
                             "invoice_date": instance.invoice_date,
                             "quantity": instance.quantity,
                             "cost": instance.cost,
-                            "office": instance.client.office.abbreviation
+                            "office": instance.client.office.abbreviation #instance.client.attorney.office.abbreviation maybe use this
                         }
 
                         email_manager.send_email(

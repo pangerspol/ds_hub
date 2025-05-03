@@ -23,7 +23,7 @@ class SharePointManager:
     def authenticate(self):
         #Retrieves a new OAuth2 token if expired, otherwise returns cached token.
         if self.access_token and time.time() < self.token_expiry:
-            # print("Already Authenticated")
+            #  print("Already Authenticated")
             return self.access_token  # Return cached token if still valid
 
         url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
