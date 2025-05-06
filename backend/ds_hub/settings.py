@@ -27,8 +27,13 @@ SECRET_KEY = 'django-insecure-xy)n^2m!it8%lhh7^kd573iw&2=p#ckps%acym91p0&-^h*xg-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["127.0.0.1", "192.168.40.168"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "192.168.40.168"]
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # React app running on localhost
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 
@@ -43,6 +48,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'integrations',
     'entries',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -53,6 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'ds_hub.urls'

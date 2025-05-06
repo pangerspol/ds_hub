@@ -16,9 +16,14 @@ Including another URLconf
 """
 from django.urls import path, include
 from core.admin import custom_admin_site
+from core.views_auth import LoginView, LogoutView
 
 urlpatterns = [
     path('admin/', custom_admin_site.urls),
     path('api/', include('core.urls')),
     path('entries/', include('entries.urls')),
+
+    # Authentication URLs
+    path('login/', LoginView.as_view(), name='login'),
+    path('logout/', LogoutView.as_view(), name='logout'),
 ]

@@ -30,5 +30,4 @@ urlpatterns = [
     path('provider/', ProviderListCreateView.as_view(), name='provider_list'),
     path('provider/<int:pk>/', ProviderDetailView.as_view(), name='provider_detail'),
 
-    
 ]
